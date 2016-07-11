@@ -84,6 +84,8 @@ class TestDataProxy(BaseTest):
             # EmbeddedField need instance to retrieve implementation
             a = fields.EmbeddedField(MyEmbedded, instance=self.instance)
             b = fields.ListField(fields.IntField)
+            c = fields.ListField(
+                fields.EmbeddedField(MyEmbedded, instance=self.instance))
 
         d = DataProxy(MySchema())
         d.load({'a': {'aa': 1}, 'b': [2, 3]})
@@ -95,6 +97,15 @@ class TestDataProxy(BaseTest):
         assert d.to_mongo(update=True) is None
         assert not d.get('a').is_modified()
         assert not d.get('b').is_modified()
+
+        # Test ListField(EmbeddedField)
+        d.load({'c': [{'aa': 1}, {'aa': 2}]})
+        assert d.to_mongo() == {'c': [{'aa': 1}, {'aa': 2}]}
+        d.get('c')[0].aa = 3
+        # Element changed in ListField is not detected.
+        # Workaround: manually indicate modification
+        # d.get('c').set_modified()
+        assert d.to_mongo(update=True) is not None
 
     def test_set(self):
 
