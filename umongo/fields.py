@@ -406,7 +406,7 @@ class EmbeddedField(BaseField, ma_fields.Nested):
         return obj.to_mongo()
 
     def _deserialize_from_mongo(self, value):
-        return self.embedded_document_cls.build_from_mongo(value)
+        return self.embedded_document_cls.build_from_mongo(value, use_cls=True)
 
     def _validate_missing(self, value):
         # Overload default to handle recursive check

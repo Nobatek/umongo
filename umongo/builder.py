@@ -26,6 +26,15 @@ def _is_child(bases):
                  if issubclass(b, DocumentImplementation) and not b.opts.abstract), False)
 
 
+def _embedded_doc_is_child(bases):
+    """Find if the given inheritance leeds to a child document (i.e.
+    a document that shares the same collection with a parent)
+    """
+    # TODO: update docstring
+    return next((True for b in bases
+                 if issubclass(b, EmbeddedDocumentImplementation) and not b.opts.abstract), False)
+
+
 def _collect_fields(nmspc):
     """Split dict between fields and non-fields elements"""
     schema_nmspc = {}
@@ -118,6 +127,32 @@ def _build_document_opts(instance, template, name, nmspc, bases):
         collection_name = camel_to_snake(name)
 
     return DocumentOpts(collection_name=collection_name, **kwargs)
+
+
+def _build_embedded_document_opts(instance, template, name, nmspc, bases):
+    kwargs = {}
+    meta = nmspc.get('Meta')
+    kwargs['instance'] = instance
+    kwargs['template'] = template
+    kwargs['abstract'] = getattr(meta, 'abstract', False)
+    kwargs['allow_inheritance'] = getattr(meta, 'allow_inheritance', None)
+    kwargs['base_schema_cls'] = getattr(meta, 'base_schema_cls', Schema)
+    kwargs['is_child'] = _embedded_doc_is_child(bases)
+
+    # Handle option inheritance and integrity checks
+    for base in bases:
+        if not issubclass(base, EmbeddedDocumentImplementation):
+            continue
+        popts = base.opts
+        # Notify the parent of it newborn !
+        popts.children.add(name)
+        if not popts.allow_inheritance:
+            raise DocumentDefinitionError("EmbeddedDocument %r doesn't allow inheritance" % base)
+        if kwargs['abstract'] and not popts.abstract:
+            raise DocumentDefinitionError(
+                "Abstract embedded document should have all it sparents abstract")
+
+    return EmbeddedDocumentOpts(**kwargs)
 
 
 class BaseBuilder:
@@ -218,7 +253,8 @@ class BaseBuilder:
         assert issubclass(template, EmbeddedDocumentTemplate)
         name = template.__name__
         bases = self._convert_bases(template.__bases__)
-        opts = EmbeddedDocumentOpts(self.instance, template)
+        opts = _build_embedded_document_opts(
+            self.instance, template, name, template.__dict__, bases)
         nmspc, schema_template_fields = _collect_fields(template.__dict__)
         nmspc['opts'] = opts
 
@@ -231,6 +267,9 @@ class BaseBuilder:
                               if hasattr(base, 'Schema')])
         if not schema_bases:
             schema_bases = (Schema, )
+        # If EmbeddedDocument is a child, _cls field must be added to the schema
+        if opts.is_child:
+            add_child_field(name, schema_nmspc)
         schema_cls = self._build_schema(template, schema_bases, schema_nmspc)
         nmspc['Schema'] = schema_cls
         schema = schema_cls()

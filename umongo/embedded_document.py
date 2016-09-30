@@ -1,6 +1,9 @@
 from .document import Implementation, Template
 from .data_objects import BaseDataObject
 from .data_proxy import missing
+# XXX: should we create EmbeddedDocument specific exceptions?
+from .exceptions import DocumentDefinitionError, AbstractDocumentError
+from .schema import Schema
 
 
 class EmbeddedDocumentTemplate(Template):
@@ -25,12 +28,27 @@ class EmbeddedDocumentOpts:
     """
 
     def __repr__(self):
-        return ('<{ClassName}(instance={self.instance}, template={self.template})>'
+        return ('<{ClassName}('
+                'instance={self.instance}, '
+                'template={self.template}, '
+                'abstract={self.abstract}, '
+                'allow_inheritance={self.allow_inheritance}, '
+                'is_child={self.is_child}, '
+                'base_schema_cls={self.base_schema_cls}, '
+                'children={self.children})>'
                 .format(ClassName=self.__class__.__name__, self=self))
 
-    def __init__(self, instance, template):
+    def __init__(self, instance, template, abstract=False, allow_inheritance=None,
+                 base_schema_cls=Schema, is_child=False, children=None):
         self.instance = instance
         self.template = template
+        self.abstract = abstract
+        self.allow_inheritance = abstract if allow_inheritance is None else allow_inheritance
+        self.base_schema_cls = base_schema_cls
+        self.is_child = is_child
+        self.children = set(children) if children else set()
+        if self.abstract and not self.allow_inheritance:
+            raise DocumentDefinitionError("Abstract document cannot disable inheritance")
 
 
 class EmbeddedDocumentImplementation(Implementation, BaseDataObject):
@@ -41,9 +59,12 @@ class EmbeddedDocumentImplementation(Implementation, BaseDataObject):
 
     __slots__ = ('_callback', '_data', '_modified')
     __real_attributes = None
-    opts = EmbeddedDocumentOpts(None, EmbeddedDocumentTemplate)
+    opts = EmbeddedDocumentOpts(None, EmbeddedDocumentTemplate, abstract=True,
+                                allow_inheritance=True)
 
     def __init__(self, **kwargs):
+        if self.opts.abstract:
+            raise AbstractDocumentError("Cannot instantiate an abstract EmbeddedDocument")
         self._modified = False
         self._data = self.DataProxy(kwargs)
 
@@ -66,6 +87,22 @@ class EmbeddedDocumentImplementation(Implementation, BaseDataObject):
     def clear_modified(self):
         self._modified = False
         self._data.clear_modified()
+
+    @classmethod
+    def build_from_mongo(cls, data, use_cls=False):
+        """
+        Create an embedded document instance from MongoDB data
+
+        :param data: data as retrieved from MongoDB
+        :param use_cls: if the data contains a ``_cls`` field,
+            use it determine the Document class to instanciate
+        """
+        # If a _cls is specified, we have to use this embedded document class
+        if use_cls and '_cls' in data:
+            cls = cls.opts.instance.retrieve_embedded_document(data['_cls'])
+        embedded_doc = cls()
+        embedded_doc.from_mongo(data)
+        return embedded_doc
 
     def from_mongo(self, data):
         self._data.from_mongo(data)
