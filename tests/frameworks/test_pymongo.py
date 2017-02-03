@@ -228,6 +228,15 @@ class TestPymongo(BaseDBTest):
         course.reload()
         assert course.teacher.fetch().name == 'Dr. Brown'
 
+        # But we can force reload as soon as referenced document is committed
+        # without having to reload the whole referencer
+        teacher.name = 'M. Strickland'
+        assert course.teacher.fetch().name == 'Dr. Brown'
+        assert course.teacher.fetch(force_reload=True).name == 'Dr. Brown'
+        teacher.commit()
+        assert course.teacher.fetch().name == 'Dr. Brown'
+        assert course.teacher.fetch(force_reload=True).name == 'M. Strickland'
+
         # Test bad ref as well
         course.teacher = Reference(classroom_model.Teacher, ObjectId())
         with pytest.raises(exceptions.ValidationError) as exc:
