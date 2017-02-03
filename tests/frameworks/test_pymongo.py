@@ -237,6 +237,19 @@ class TestPymongo(BaseDBTest):
         assert course.teacher.fetch().name == 'Dr. Brown'
         assert course.teacher.fetch(force_reload=True).name == 'M. Strickland'
 
+        # Actually, that force_reload parameter is just a shortcut for
+        # fetch().reload()...
+        teacher.name = 'Dr. Brown'
+        assert course.teacher.fetch().name == 'M. Strickland'
+        teacher_fetched = course.teacher.fetch()
+        teacher_fetched.reload()
+        assert teacher_fetched.name == 'M. Strickland'
+        teacher.commit()
+        assert course.teacher.fetch().name == 'M. Strickland'
+        teacher_fetched = course.teacher.fetch()
+        teacher_fetched.reload()
+        assert teacher_fetched.name == 'Dr. Brown'
+
         # Test bad ref as well
         course.teacher = Reference(classroom_model.Teacher, ObjectId())
         with pytest.raises(exceptions.ValidationError) as exc:
