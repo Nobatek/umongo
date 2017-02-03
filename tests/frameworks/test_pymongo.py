@@ -218,6 +218,16 @@ class TestPymongo(BaseDBTest):
         assert isinstance(course.teacher, Reference)
         teacher_fetched = course.teacher.fetch()
         assert teacher_fetched == teacher
+
+        # Change in referenced document is not seen until referenced
+        # document is committed and referencer is reloaded
+        teacher.name = 'Dr. Brown'
+        assert course.teacher.fetch().name == 'M. Strickland'
+        teacher.commit()
+        assert course.teacher.fetch().name == 'M. Strickland'
+        course.reload()
+        assert course.teacher.fetch().name == 'Dr. Brown'
+
         # Test bad ref as well
         course.teacher = Reference(classroom_model.Teacher, ObjectId())
         with pytest.raises(exceptions.ValidationError) as exc:
