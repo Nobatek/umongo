@@ -283,7 +283,10 @@ class ReferenceField(BaseField, ma_bonus_fields.Reference):
             if not value.is_created:
                 raise ValidationError(
                     _("Cannot reference a document that has not been created yet."))
-            value = value.pk
+            # Return Reference, with _document preloaded with provided document
+            ref = self.reference_cls(self.document_cls, value.pk)
+            ref._document = value
+            return ref
         elif isinstance(value, self._document_implementation_cls):
             raise ValidationError(_("`{document}` reference expected.").format(
                 document=self.document_cls.__name__))

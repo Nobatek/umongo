@@ -219,11 +219,17 @@ class TestPymongo(BaseDBTest):
         teacher_fetched = course.teacher.fetch()
         assert teacher_fetched == teacher
 
-        # Change in referenced document is not seen until referenced
-        # document is committed and referencer is reloaded
+        # Change in referenced document is now seen as soon as referenced
+        # document is modified
         teacher.name = 'Dr. Brown'
-        assert course.teacher.fetch().name == 'M. Strickland'
+        assert course.teacher.fetch().name == 'Dr. Brown'
         teacher.commit()
+        assert course.teacher.fetch().name == 'Dr. Brown'
+        course.reload()
+        assert course.teacher.fetch().name == 'Dr. Brown'
+        # Of course, when reloading, we get the value from DB
+        teacher = course.teacher.fetch()
+        teacher.name = 'M. Strickland'
         assert course.teacher.fetch().name == 'M. Strickland'
         course.reload()
         assert course.teacher.fetch().name == 'Dr. Brown'
