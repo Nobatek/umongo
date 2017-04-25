@@ -64,8 +64,6 @@ class DictField(BaseField, ma_fields.Dict):
         return Dict(value)
 
     def _serialize_to_mongo(self, obj):
-        if not obj:
-            return missing
         return dict(obj)
 
     def _deserialize_from_mongo(self, value):
