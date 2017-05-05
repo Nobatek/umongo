@@ -5,6 +5,7 @@ from dateutil.tz.tz import tzutc, tzoffset
 from marshmallow import ValidationError
 from uuid import UUID
 
+from umongo import validate
 from umongo.data_proxy import data_proxy_factory
 from umongo import Document, EmbeddedDocument, Schema, EmbeddedSchema, fields, Reference
 from umongo.data_objects import List, Dict
@@ -538,3 +539,20 @@ class TestFields(BaseTest):
         ]:
             with pytest.raises(ValidationError):
                 d.set('gref', v)
+
+
+class TestDefault(BaseTest):
+
+    def test_default(self):
+
+        @self.instance.register
+        class Person(Document):
+            name = fields.StringField(default='Eric', validate=validate.OneOf(('Stan', 'Kyle', 'Kenny')))
+
+        person = Person()
+        # This should raise an exception
+        # But it does not because the default value is not validated
+        assert person.name == 'Eric'
+
+        with pytest.raises(ValidationError):
+            person.name = 'Eric'
